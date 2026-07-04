@@ -15,8 +15,8 @@ interface Track {
 interface MusicPickerProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (music: { url: string; title: string; start_ms: number } | null) => void;
-  currentMusic?: { url: string; title: string; start_ms: number } | null;
+  onSelect: (music: { url: string; title: string; start_ms: number; duration_s?: number } | null) => void;
+  currentMusic?: { url: string; title: string; start_ms: number; duration_s?: number } | null;
   /** Footer button + flow label, e.g. "Pulse", "Vibe", "Spark". Defaults to "Spark"
    *  so existing callers that don't pass it keep their current behavior. */
   context?: string;
@@ -71,6 +71,10 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
   const [uploadTrimStart, setUploadTrimStart] = useState(0);
   const [uploadDuration, setUploadDuration] = useState(0);
 
+  // New states for the double-sided 15s/30s custom clip audio trimmer
+  const [clipDuration, setClipDuration] = useState<number>(currentMusic?.duration_s || 15);
+  const [isTrimPreviewPlaying, setIsTrimPreviewPlaying] = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const uploadAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +88,7 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
     audioRef.current?.pause();
     uploadAudioRef.current?.pause();
     setPlayingId(null);
+    setIsTrimPreviewPlaying(false);
   };
 
   const togglePlay = (track: Track) => {
@@ -111,6 +116,7 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
     stopAll();
     setSelectedTrack(track);
     setTrimStart(0);
+    setIsTrimPreviewPlaying(true); // Auto-start playing the trimmed preview segment
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,6 +129,7 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
     const url = URL.createObjectURL(file);
     setUploadedFile({ name: file.name.replace(/\.[^.]+$/, ''), url });
     setUploadTrimStart(0);
+    setIsTrimPreviewPlaying(true); // Auto-play the uploaded file trim region
     if (uploadAudioRef.current) {
       uploadAudioRef.current.src = url;
       uploadAudioRef.current.load();
@@ -136,11 +143,201 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
     fileInputRef.current?.click();
   };
 
+  // Trim preview loop for Curated tracks
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+    const audio = audioRef.current;
+    if (!audio || !selectedTrack || !isTrimPreviewPlaying) return;
+
+    audio.src = selectedTrack.url;
+    audio.currentTime = trimStart;
+    audio.volume = 0.8;
+    audio.muted = false;
+
+    audio.play().catch(err => {
+      console.warn("Curated preview playback failed:", err);
+    });
+
+    const endSecs = trimStart + clipDuration;
+
+    const handleTimeUpdate = () => {
+      if (audio.currentTime >= endSecs || audio.currentTime < trimStart) {
+        audio.currentTime = trimStart;
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.pause();
+    };
+  }, [selectedTrack, trimStart, clipDuration, isTrimPreviewPlaying]);
+
+  // Trim preview loop for Uploaded audio files
+  useEffect(() => {
+    const audio = uploadAudioRef.current;
+    if (!audio || !uploadedFile || !isTrimPreviewPlaying) return;
+
+    audio.currentTime = uploadTrimStart;
+    audio.volume = 0.8;
+    audio.muted = false;
+
+    audio.play().catch(err => {
+      console.warn("Uploaded preview playback failed:", err);
+    });
+
+    const endSecs = uploadTrimStart + clipDuration;
+
+    const handleTimeUpdate = () => {
+      if (audio.currentTime >= endSecs || audio.currentTime < uploadTrimStart) {
+        audio.currentTime = uploadTrimStart;
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.pause();
+    };
+  }, [uploadedFile, uploadTrimStart, clipDuration, isTrimPreviewPlaying]);
+
+  // Unified Custom Audio Trimmer Interface
+  const renderTrimmerWorkspace = (duration: number, currentStart: number, onStartChange: (val: number) => void) => {
+    if (!selectedTrack && !uploadedFile) return null;
+
+    const trackDuration = selectedTrack ? selectedTrack.duration : duration;
+    const title = selectedTrack ? selectedTrack.title : uploadedFile?.name;
+
+    const percentStart = (currentStart / trackDuration) * 100;
+    const percentWidth = (clipDuration / trackDuration) * 100;
+
+    return (
+      <div className="bg-[#141414] border border-[#B026FF]/30 rounded-2xl p-4 flex flex-col gap-4 mt-2 shadow-[0_8px_32px_rgba(176,38,255,0.08)]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-[#B026FF] font-black uppercase tracking-widest">✂️ Audio Trimmer</span>
+            <span className="text-[10px] bg-white/5 border border-white/10 text-white/60 px-2 py-0.5 rounded-full truncate max-w-[150px] font-medium">
+              {title}
+            </span>
+          </div>
+          {/* Duration Selector */}
+          <div className="flex bg-white/5 p-0.5 rounded-lg border border-white/10">
+            {[15, 30].map(d => (
+              <button
+                key={d}
+                onClick={() => {
+                  setClipDuration(d);
+                  // Ensure start time doesn't exceed new bounds
+                  if (currentStart + d > trackDuration) {
+                    onStartChange(Math.max(0, trackDuration - d));
+                  }
+                  setIsTrimPreviewPlaying(true);
+                }}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${clipDuration === d ? 'bg-[#B026FF] text-white' : 'text-white/40 hover:text-white'}`}
+              >
+                {d}s
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Visual Waveform Track */}
+        <div className="relative h-6 bg-white/5 rounded-lg overflow-hidden border border-white/10 flex items-center">
+          {/* Mock Waveform Bars */}
+          <div className="absolute inset-0 flex items-center justify-between px-3 gap-[2px] opacity-20 pointer-events-none">
+            {Array.from({ length: 40 }).map((_, idx) => {
+              const h = 10 + Math.sin(idx * 0.5) * 12 + Math.cos(idx * 0.3) * 6;
+              return (
+                <div 
+                  key={idx} 
+                  className="w-[3px] bg-white rounded-full" 
+                  style={{ height: `${Math.max(4, Math.min(24, h))}px` }} 
+                />
+              );
+            })}
+          </div>
+
+          {/* Active Highlighted Trim Region */}
+          <div 
+            className="absolute h-full bg-gradient-to-r from-[#B026FF]/30 to-[#00F0FF]/30 border-l-2 border-r-2 border-[#00F0FF] flex items-center justify-between shadow-[inset_0_0_12px_rgba(0,240,255,0.2)]"
+            style={{ left: `${percentStart}%`, width: `${percentWidth}%` }}
+          >
+            {/* Grab handlers */}
+            <div className="w-1 h-3 bg-[#00F0FF] rounded-full ml-0.5" />
+            <div className="w-1 h-3 bg-[#00F0FF] rounded-full mr-0.5" />
+          </div>
+        </div>
+
+        {/* Trim Start Slider Control */}
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-between items-center text-[11px] text-white/50 font-medium font-mono">
+            <span>Start: {fmt(currentStart)}</span>
+            <span>End: {fmt(currentStart + clipDuration)}</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, trackDuration - clipDuration)}
+            step={1}
+            value={currentStart}
+            onChange={e => {
+              onStartChange(Number(e.target.value));
+              setIsTrimPreviewPlaying(true);
+            }}
+            className="w-full accent-[#00F0FF] cursor-ew-resize py-1"
+          />
+        </div>
+
+        {/* Audio Trim Controls */}
+        <div className="flex items-center justify-between border-t border-white/5 pt-3">
+          <div className="text-[10px] text-white/40 font-semibold uppercase">
+            {isTrimPreviewPlaying ? (
+              <span className="text-[#00F0FF] animate-pulse flex items-center gap-1 font-mono">
+                ● Playing {clipDuration}s clip...
+              </span>
+            ) : (
+              <span>Preview Stopped</span>
+            )}
+          </div>
+
+          <button
+            onClick={() => setIsTrimPreviewPlaying(!isTrimPreviewPlaying)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#B026FF]/10 hover:bg-[#B026FF]/20 border border-[#B026FF]/30 rounded-xl transition-all text-xs font-bold text-white shadow-sm cursor-pointer"
+          >
+            {isTrimPreviewPlaying ? (
+              <>
+                <Pause className="w-3.5 h-3.5 text-[#00F0FF]" />
+                <span>Pause</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 text-[#B026FF] ml-0.5" />
+                <span>Listen Clip</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const handleConfirm = () => {
     if (tab === 'library' && selectedTrack) {
-      onSelect({ url: selectedTrack.url, title: `${selectedTrack.title} – ${selectedTrack.artist}`, start_ms: Math.round(trimStart * 1000) });
+      onSelect({ 
+        url: selectedTrack.url, 
+        title: `${selectedTrack.title} – ${selectedTrack.artist}`, 
+        start_ms: Math.round(trimStart * 1000),
+        duration_s: clipDuration
+      });
     } else if (tab === 'upload' && uploadedFile) {
-      onSelect({ url: uploadedFile.url, title: uploadedFile.name, start_ms: Math.round(uploadTrimStart * 1000) });
+      onSelect({ 
+        url: uploadedFile.url, 
+        title: uploadedFile.name, 
+        start_ms: Math.round(uploadTrimStart * 1000),
+        duration_s: clipDuration
+      });
     }
     stopAll();
     onClose();
@@ -240,24 +437,7 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
                     );
                   })}
                 </div>
-                {selectedTrack && (
-                  <div className="bg-[#111] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
-                    <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest">✂️ Clip Start (15s preview)</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={Math.max(0, selectedTrack.duration - 15)}
-                      step={1}
-                      value={trimStart}
-                      onChange={e => setTrimStart(Number(e.target.value))}
-                      className="w-full accent-[#B026FF]"
-                    />
-                    <div className="flex justify-between text-[10px] text-white/40 font-mono">
-                      <span>Start: {fmt(trimStart)}</span>
-                      <span>End: {fmt(trimStart + 15)}</span>
-                    </div>
-                  </div>
-                )}
+                {selectedTrack && renderTrimmerWorkspace(selectedTrack.duration, trimStart, setTrimStart)}
               </>
             ) : tab === 'library' ? (
               <>
@@ -318,24 +498,7 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
                 </div>
 
                 {/* Trim for library */}
-                {selectedTrack && (
-                  <div className="bg-[#111] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
-                    <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest">✂️ Clip Start (15s preview)</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={Math.max(0, selectedTrack.duration - 15)}
-                      step={1}
-                      value={trimStart}
-                      onChange={e => setTrimStart(Number(e.target.value))}
-                      className="w-full accent-[#B026FF]"
-                    />
-                    <div className="flex justify-between text-[10px] text-white/40 font-mono">
-                      <span>Start: {fmt(trimStart)}</span>
-                      <span>End: {fmt(trimStart + 15)}</span>
-                    </div>
-                  </div>
-                )}
+                {selectedTrack && renderTrimmerWorkspace(selectedTrack.duration, trimStart, setTrimStart)}
               </>
             ) : (
               <>
@@ -391,24 +554,7 @@ export function MusicPicker({ isOpen, onClose, onSelect, currentMusic, context =
                       onLoadedMetadata={() => setUploadDuration(uploadAudioRef.current?.duration || 0)}
                     />
 
-                    {uploadDuration > 0 && (
-                      <div className="bg-[#111] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
-                        <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest">✂️ Clip Start (15s preview)</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={Math.max(0, uploadDuration - 15)}
-                          step={1}
-                          value={uploadTrimStart}
-                          onChange={e => setUploadTrimStart(Number(e.target.value))}
-                          className="w-full accent-[#B026FF]"
-                        />
-                        <div className="flex justify-between text-[10px] text-white/40 font-mono">
-                          <span>Start: {fmt(uploadTrimStart)}</span>
-                          <span>End: {fmt(uploadTrimStart + 15)}</span>
-                        </div>
-                      </div>
-                    )}
+                    {uploadDuration > 0 && renderTrimmerWorkspace(uploadDuration, uploadTrimStart, setUploadTrimStart)}
 
                     <button
                       onClick={() => { setUploadedFile(null); fileInputRef.current?.click(); }}

@@ -136,6 +136,30 @@ function TextPost({ post, onLike, onComment, onShare, onSave, navigate }: any) {
     }
   }, [muted]);
 
+  // Synchronize audio starting point and custom trim duration loop
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !hasMusic || !post.music) return;
+
+    const startSecs = (post.music.start_ms || 0) / 1000;
+    const duration = post.music.duration_s || 15;
+    const endSecs = startSecs + duration;
+
+    // Set initial seek position
+    audio.currentTime = startSecs;
+
+    const handleTimeUpdate = () => {
+      if (audio.currentTime >= endSecs || audio.currentTime < startSecs) {
+        audio.currentTime = startSecs;
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [hasMusic, post.music?.url, post.music?.start_ms, post.music?.duration_s]);
+
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
     const nextMuted = !muted;
@@ -155,7 +179,6 @@ function TextPost({ post, onLike, onComment, onShare, onSave, navigate }: any) {
         <audio
           ref={audioRef}
           src={post.music.url}
-          loop
           muted={muted}
           playsInline
         />
@@ -463,6 +486,30 @@ function MultiImagePost({ post, onLike, onComment, onShare, onSave, onReact, nav
 
   const hasMusic = !!post.music?.url;
 
+  // Synchronize audio starting point and custom trim duration loop
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !hasMusic || !post.music) return;
+
+    const startSecs = (post.music.start_ms || 0) / 1000;
+    const duration = post.music.duration_s || 15;
+    const endSecs = startSecs + duration;
+
+    // Set initial seek position
+    audio.currentTime = startSecs;
+
+    const handleTimeUpdate = () => {
+      if (audio.currentTime >= endSecs || audio.currentTime < startSecs) {
+        audio.currentTime = startSecs;
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [hasMusic, post.music?.url, post.music?.start_ms, post.music?.duration_s]);
+
   useEffect(() => {
     if (!hasMusic) return;
     const container = containerRef.current;
@@ -559,7 +606,6 @@ function MultiImagePost({ post, onLike, onComment, onShare, onSave, onReact, nav
           <audio
             ref={audioRef}
             src={post.music.url}
-            loop
             muted={muted}
             playsInline
           />
@@ -912,6 +958,30 @@ function ImagePost({ post, onLike, onComment, onShare, onSave, onReact, navigate
 
   const hasMusic = !!post.music?.url;
 
+  // Synchronize audio starting point and custom trim duration loop
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !hasMusic || !post.music) return;
+
+    const startSecs = (post.music.start_ms || 0) / 1000;
+    const duration = post.music.duration_s || 15;
+    const endSecs = startSecs + duration;
+
+    // Set initial seek position
+    audio.currentTime = startSecs;
+
+    const handleTimeUpdate = () => {
+      if (audio.currentTime >= endSecs || audio.currentTime < startSecs) {
+        audio.currentTime = startSecs;
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [hasMusic, post.music?.url, post.music?.start_ms, post.music?.duration_s]);
+
   useEffect(() => {
     if (!hasMusic) return;
     const container = containerRef.current;
@@ -1012,7 +1082,6 @@ function ImagePost({ post, onLike, onComment, onShare, onSave, onReact, navigate
           <audio
             ref={audioRef}
             src={post.music.url}
-            loop
             muted={muted}
             playsInline
           />
@@ -1470,7 +1539,7 @@ function PulseCreateSheet({ isOpen, onClose, currentUser, onPost, onSchedule, dr
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [isReading, setIsReading] = useState(false);
   const [mood, setMood] = useState<string>(getDefaultMood());
-  const [music, setMusic] = useState<{ url: string; title: string; start_ms: number } | null>(null);
+  const [music, setMusic] = useState<{ url: string; title: string; start_ms: number; duration_s?: number } | null>(null);
   const [taggedUsers, setTaggedUsers] = useState<{ user: string; handle: string; avatar: string }[]>([]);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
