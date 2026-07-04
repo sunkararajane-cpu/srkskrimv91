@@ -6,6 +6,7 @@ import {
   SmilePlus, RefreshCw, X, Play, ChevronLeft, ChevronRight,
   Music, MapPin, Repeat2, Quote, Flame, Plus, Images, Video, Send,
   Tag, Hash, Search, Check, Clock, Calendar, Trash2, FileEdit, BarChart3,
+  Pause, Volume2, VolumeX,
 } from 'lucide-react';
 import { likePost } from '../lib/mock/mockServices';
 import { getMutedUsers, getBlockedUsers, getPostModerationSettings, savePostModerationSettings } from '../lib/mock/mockSocialGraph';
@@ -530,6 +531,30 @@ function PostActions({ post, onLike, onComment, onShare, onSave, onReact, naviga
 
 // ─── Video-thumb post ─────────────────────────────────────────
 function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, navigate, onPickerDown, onPickerUp, pickerPostId, triggerReaction }: any) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(err => {
+        console.error("Video playback failed:", err);
+      });
+    }
+  };
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMuted(prev => !prev);
+  };
+
   return (
     <div className="flex flex-col gap-3 pb-6 border-b border-white/5">
       <div className="flex items-center justify-between px-4">
@@ -551,27 +576,62 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
         )}
       </div>
 
-      <div className="relative w-full aspect-[4/5] overflow-hidden group"
+      <div className="relative w-full aspect-[4/5] overflow-hidden group bg-black"
         id={`pulse-image-${post.id}`}
         onPointerDown={() => onPickerDown(post.id)}
         onPointerUp={onPickerUp} onPointerLeave={onPickerUp}
         onDoubleClick={() => onLike(post.id)}
       >
-        <img src={post.image} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        {/* Play button */}
+        {!isPlaying ? (
+          <img src={post.image} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        ) : (
+          <video
+            ref={videoRef}
+            src={post.videoSrc || "https://www.w3schools.com/html/mov_bbb.mp4"}
+            loop
+            muted={muted}
+            playsInline
+            autoPlay
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onClick={togglePlay}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+        
+        {/* Play/Pause Overlay Button */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 cursor-pointer shadow-2xl">
-            <Play className="w-7 h-7 text-white fill-white ml-1" />
+          <motion.div 
+            whileHover={{ scale: 1.1 }} 
+            whileTap={{ scale: 0.9 }}
+            onClick={togglePlay}
+            className={`w-16 h-16 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/20 cursor-pointer shadow-2xl transition-opacity duration-300 ${isPlaying ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
+          >
+            {isPlaying ? (
+              <Pause className="w-7 h-7 text-white fill-white" />
+            ) : (
+              <Play className="w-7 h-7 text-white fill-white ml-1" />
+            )}
           </motion.div>
         </div>
+
+        {/* Mute/Unmute Control (Only shown when playing) */}
+        {isPlaying && (
+          <button 
+            onClick={toggleMute}
+            className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/70 transition"
+          >
+            {muted ? <VolumeX className="w-4 h-4 text-white/80" /> : <Volume2 className="w-4 h-4 text-white" />}
+          </button>
+        )}
+
         {/* Duration */}
-        <div className="absolute bottom-3 right-3 bg-black/70 rounded px-1.5 py-0.5 text-xs text-white font-bold">{post.duration}</div>
+        {!isPlaying && post.duration && (
+          <div className="absolute bottom-3 right-3 bg-black/70 rounded px-1.5 py-0.5 text-xs text-white font-bold">{post.duration}</div>
+        )}
         {/* Audio */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/50 rounded-full px-2 py-1">
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/50 rounded-full px-2 py-1 z-10">
           <Music className="w-3 h-3 text-[#B026FF]" />
-          <span className="text-[10px] text-white/80 truncate max-w-[120px]">{post.audioContext}</span>
+          <span className="text-[10px] text-white/80 truncate max-w-[120px]">{post.audioContext || "Original Audio"}</span>
         </div>
         {/* Reaction picker */}
         <AnimatePresence>

@@ -404,16 +404,16 @@ export function ImmersivePostViewer({ initialIndex, type, urls, user, users, onC
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            className={`relative w-[90%] max-w-[450px] shadow-[0_20px_60px_rgba(176,38,255,0.4)] cursor-pointer touch-none ${(type === 'vibe' || currentUrl.includes('400/700')) ? 'aspect-[9/16]' : 'aspect-square'} rounded-[24px] overflow-hidden`}
+            className={`relative w-[90%] max-w-[450px] shadow-[0_20px_60px_rgba(176,38,255,0.4)] cursor-pointer touch-none ${(type === 'vibe' || currentUrl?.startsWith('data:video/') || currentUrl?.includes('400/700')) ? 'aspect-[9/16]' : 'aspect-square'} rounded-[24px] overflow-hidden`}
             onDoubleClick={handleDoubleTap}
           >
-            {(type === 'vibe' || currentUrl.includes('400/700')) ? (
+            {(type === 'vibe' || type === 'video' || type === 'video_thumb' || currentUrl?.startsWith('data:video/') || currentUrl?.includes('400/700')) ? (
               <video
-                 src="https://www.w3schools.com/html/mov_bbb.mp4"
+                 src={currentUrl?.startsWith('data:video/') ? currentUrl : "https://www.w3schools.com/html/mov_bbb.mp4"}
                  autoPlay 
                  loop 
                  playsInline 
-                 poster={currentUrl}
+                 poster={currentUrl?.startsWith('data:video/') ? undefined : currentUrl}
                  className="w-full h-full object-cover pointer-events-none"
               />
             ) : (
