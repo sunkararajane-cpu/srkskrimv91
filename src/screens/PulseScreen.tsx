@@ -535,19 +535,23 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
   const [muted, setMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const togglePlay = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!videoRef.current) return;
+  const isLocalVideo = post.videoSrc?.startsWith('data:video/') || post.image?.startsWith('data:video/');
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
     if (isPlaying) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      videoRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
+      video.play().catch(err => {
         console.error("Video playback failed:", err);
       });
+    } else {
+      video.pause();
     }
+  }, [isPlaying]);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsPlaying(prev => !prev);
   };
 
   const toggleMute = (e: React.MouseEvent) => {
@@ -582,20 +586,16 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
         onPointerUp={onPickerUp} onPointerLeave={onPickerUp}
         onDoubleClick={() => onLike(post.id)}
       >
-        {!isPlaying ? (
-          <img src={post.image} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        ) : (
-          <video
-            ref={videoRef}
-            src={post.videoSrc || "https://www.w3schools.com/html/mov_bbb.mp4"}
-            loop
-            muted={muted}
-            playsInline
-            autoPlay
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            onClick={togglePlay}
-          />
-        )}
+        <video
+          ref={videoRef}
+          src={post.videoSrc || "https://www.w3schools.com/html/mov_bbb.mp4"}
+          poster={isLocalVideo ? undefined : post.image}
+          loop
+          muted={muted}
+          playsInline
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+          onClick={togglePlay}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
         
         {/* Play/Pause Overlay Button */}
