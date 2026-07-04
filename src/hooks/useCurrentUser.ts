@@ -14,11 +14,13 @@ export const useCurrentUser = () => {
   });
 
   useEffect(() => {
+    let t: NodeJS.Timeout;
     const fetchUser = () => {
       const stored = localStorage.getItem('skrimchat_user');
       if (stored) {
         try {
-          setCurrentUser(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          t = setTimeout(() => setCurrentUser(parsed), 0);
         } catch (e) {
           console.error("Error parsing stored user", e);
         }
@@ -27,7 +29,10 @@ export const useCurrentUser = () => {
     
     // Listen for custom event to update when profile changes
     window.addEventListener('skrimchat_user_updated', fetchUser);
-    return () => window.removeEventListener('skrimchat_user_updated', fetchUser);
+    return () => {
+      window.removeEventListener('skrimchat_user_updated', fetchUser);
+      clearTimeout(t);
+    };
   }, []);
 
   return currentUser;

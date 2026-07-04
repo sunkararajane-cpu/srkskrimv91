@@ -104,9 +104,15 @@ export function saveAchievements(ach: AchievementState) {
 export function useAchievements() {
   const [ach, setAch] = useState<AchievementState>(getAchievements());
   useEffect(() => {
-    const handler = () => setAch(getAchievements());
+    let t: NodeJS.Timeout;
+    const handler = () => {
+      t = setTimeout(() => setAch(getAchievements()), 0);
+    };
     window.addEventListener('skrimchat_achievements_updated', handler);
-    return () => window.removeEventListener('skrimchat_achievements_updated', handler);
+    return () => {
+      window.removeEventListener('skrimchat_achievements_updated', handler);
+      clearTimeout(t);
+    };
   }, []);
   return ach;
 }
@@ -114,9 +120,15 @@ export function useAchievements() {
 export function useTrackingStats() {
   const [stats, setStats] = useState(getTrackingStats());
   useEffect(() => {
-    const handler = () => setStats(getTrackingStats());
+    let t: NodeJS.Timeout;
+    const handler = () => {
+      t = setTimeout(() => setStats(getTrackingStats()), 0);
+    };
     window.addEventListener('skrimchat_stats_updated', handler);
-    return () => window.removeEventListener('skrimchat_stats_updated', handler);
+    return () => {
+      window.removeEventListener('skrimchat_stats_updated', handler);
+      clearTimeout(t);
+    };
   }, []);
   return stats;
 }
@@ -211,9 +223,15 @@ export function getDailyMissions(): DailyMissionsState {
 export function useDailyMissions() {
   const [dm, setDm] = useState<DailyMissionsState>(getDailyMissions());
   useEffect(() => {
-    const handler = () => setDm(getDailyMissions());
+    let t: NodeJS.Timeout;
+    const handler = () => {
+      t = setTimeout(() => setDm(getDailyMissions()), 0);
+    };
     window.addEventListener('skrimchat_missions_updated', handler);
-    return () => window.removeEventListener('skrimchat_missions_updated', handler);
+    return () => {
+      window.removeEventListener('skrimchat_missions_updated', handler);
+      clearTimeout(t);
+    };
   }, []);
   return dm;
 }

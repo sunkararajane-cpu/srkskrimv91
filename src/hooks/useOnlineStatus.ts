@@ -54,12 +54,12 @@ export function useIsOnline(username?: string) {
   const [isOnline, setIsOnline] = useState(() => {
     if (!username) return false;
 
-    const currentUserStr = localStorage.getItem('skrimchat_mock_user');
+    const currentUserStr = localStorage.getItem('skrimchat_user') || localStorage.getItem('skrimchat_mock_user');
     let currentUsername = '';
     if (currentUserStr) {
        try {
          const cu = JSON.parse(currentUserStr);
-         currentUsername = cu.username || '';
+         currentUsername = cu.username || cu.handle || '';
        } catch (e) {}
     }
     
@@ -94,12 +94,13 @@ export function useIsOnline(username?: string) {
   useEffect(() => {
     if (!username) return;
 
-    const currentUserStr = localStorage.getItem('skrimchat_mock_user');
+    let t: NodeJS.Timeout;
+    const currentUserStr = localStorage.getItem('skrimchat_user') || localStorage.getItem('skrimchat_mock_user');
     let currentUsername = '';
     if (currentUserStr) {
        try {
          const cu = JSON.parse(currentUserStr);
-         currentUsername = cu.username || '';
+         currentUsername = cu.username || cu.handle || '';
        } catch (e) {}
     }
     
@@ -111,14 +112,17 @@ export function useIsOnline(username?: string) {
         const lastActive = parseInt(localStorage.getItem('skrimchat_last_active') || '0', 10);
         const now = Date.now();
         if (document.hidden) {
-          setIsOnline(false);
+          t = setTimeout(() => setIsOnline(false), 0);
         } else {
-          setIsOnline(now - lastActive < ONLINE_TIMEOUT);
+          t = setTimeout(() => setIsOnline(now - lastActive < ONLINE_TIMEOUT), 0);
         }
       };
 
       window.addEventListener('skrimchat_online_status', checkCurrentUser);
-      return () => window.removeEventListener('skrimchat_online_status', checkCurrentUser);
+      return () => {
+        window.removeEventListener('skrimchat_online_status', checkCurrentUser);
+        clearTimeout(t);
+      };
     } else {
       const getMockStatus = () => {
         const statusesStr = localStorage.getItem('skrimchat_mock_online_statuses');
@@ -127,12 +131,15 @@ export function useIsOnline(username?: string) {
           try { statuses = JSON.parse(statusesStr); } catch {}
         }
         if (statuses[normUser] !== undefined) {
-          setIsOnline(statuses[normUser]);
+          t = setTimeout(() => setIsOnline(statuses[normUser]), 0);
         }
       };
 
       window.addEventListener('skrimchat_mock_online_updated', getMockStatus);
-      return () => window.removeEventListener('skrimchat_mock_online_updated', getMockStatus);
+      return () => {
+        window.removeEventListener('skrimchat_mock_online_updated', getMockStatus);
+        clearTimeout(t);
+      };
     }
   }, [username]);
 
