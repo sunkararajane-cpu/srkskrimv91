@@ -363,9 +363,74 @@ function RepostCard({ post, onLike, onComment, onShare, onSave, onReact, navigat
 function MultiImagePost({ post, onLike, onComment, onShare, onSave, onReact, navigate, onPickerDown, onPickerUp, pickerPostId, triggerReaction }: any) {
   const [imgIdx, setImgIdx] = useState(0);
   const images = post.images || [post.image];
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const hasMusic = !!post.music?.url;
+
+  useEffect(() => {
+    if (!hasMusic) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+            setIsPlaying(true);
+            setMuted(false); // Play unmuted when scrolled into view
+          } else {
+            setIsPlaying(false);
+          }
+        });
+      },
+      {
+        threshold: [0.0, 0.6],
+      }
+    );
+
+    observer.observe(container);
+    return () => {
+      observer.unobserve(container);
+    };
+  }, [hasMusic]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.muted = muted;
+      audio.play().catch(err => {
+        console.warn("Audio playback failed, trying muted autoplay:", err);
+        audio.muted = true;
+        audio.play().catch(e => {
+          console.error("Muted audio playback failed:", e);
+        });
+      });
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, muted]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = muted;
+    }
+  }, [muted]);
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = nextMuted;
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-3 pb-6 border-b border-white/5">
+    <div ref={containerRef} className="flex flex-col gap-3 pb-6 border-b border-white/5">
       {/* Header */}
       <div className="flex items-center justify-between px-4">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/profile/${post.handle.replace('@', '')}`)}>
@@ -397,6 +462,15 @@ function MultiImagePost({ post, onLike, onComment, onShare, onSave, onReact, nav
         onPointerLeave={onPickerUp}
         onDoubleClick={() => onLike(post.id)}
       >
+        {hasMusic && (
+          <audio
+            ref={audioRef}
+            src={post.music.url}
+            loop
+            muted={muted}
+            playsInline
+          />
+        )}
         <AnimatePresence mode="wait">
           <motion.img
             key={imgIdx}
@@ -450,6 +524,39 @@ function MultiImagePost({ post, onLike, onComment, onShare, onSave, onReact, nav
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Music Badge with Play/Mute controls */}
+        {(post.music || post.audioContext) && (
+          <div 
+            onClick={hasMusic ? toggleMute : undefined}
+            className={`absolute top-3 left-3 bg-black/60 hover:bg-black/80 transition-colors backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2 select-none z-20 ${hasMusic ? 'cursor-pointer border border-[#B026FF]/30 shadow-lg shadow-[#B026FF]/10' : ''}`}
+          >
+            {hasMusic ? (
+              <>
+                {isPlaying && !muted ? (
+                  <div className="flex items-end gap-[2px] h-3 w-3">
+                    <span className="w-[2px] bg-[#00F0FF] rounded-full animate-[equalizer_0.8s_infinite_alternate]" style={{ animationDelay: '0.1s' }} />
+                    <span className="w-[2px] bg-[#B026FF] rounded-full animate-[equalizer_1.2s_infinite_alternate]" style={{ animationDelay: '0.4s' }} />
+                    <span className="w-[2px] bg-[#00F0FF] rounded-full animate-[equalizer_0.9s_infinite_alternate]" style={{ animationDelay: '0.2s' }} />
+                  </div>
+                ) : (
+                  <Music className="w-3.5 h-3.5 text-gray-400" />
+                )}
+                <span className="text-[10px] text-white/90 font-medium truncate max-w-[140px]">
+                  {post.music?.title || post.audioContext || "Background Music"}
+                </span>
+                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-white/10 text-white/70 uppercase">
+                  {muted ? "MUTED" : "PLAYING"}
+                </span>
+              </>
+            ) : (
+              <>
+                <Music className="w-3 h-3 text-[#B026FF]" />
+                <span className="text-[10px] text-white/90 truncate max-w-[120px]">{post.audioContext || "Original Audio"}</span>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Image counter badge */}
         <div className="absolute top-3 right-3 bg-black/60 rounded-full px-2 py-0.5 text-xs text-white font-bold z-10">
@@ -705,8 +812,74 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
 
 // ─── Standard image post ──────────────────────────────────────
 function ImagePost({ post, onLike, onComment, onShare, onSave, onReact, navigate, onPickerDown, onPickerUp, pickerPostId, triggerReaction, onStoryBehind, onMorePress }: any) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const hasMusic = !!post.music?.url;
+
+  useEffect(() => {
+    if (!hasMusic) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+            setIsPlaying(true);
+            setMuted(false); // Play with audio automatically when scrolled in
+          } else {
+            setIsPlaying(false);
+          }
+        });
+      },
+      {
+        threshold: [0.0, 0.6],
+      }
+    );
+
+    observer.observe(container);
+    return () => {
+      observer.unobserve(container);
+    };
+  }, [hasMusic]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.muted = muted;
+      audio.play().catch(err => {
+        console.warn("Audio playback failed, trying muted autoplay:", err);
+        audio.muted = true;
+        audio.play().catch(e => {
+          console.error("Muted audio playback failed:", e);
+        });
+      });
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, muted]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = muted;
+    }
+  }, [muted]);
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = nextMuted;
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-3 pb-6 border-b border-white/5">
+    <div ref={containerRef} className="flex flex-col gap-3 pb-6 border-b border-white/5">
       {/* Header */}
       <div className="flex items-center justify-between px-4">
         <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate(`/profile/${post.handle.replace('@', '')}`)}>
@@ -742,12 +915,50 @@ function ImagePost({ post, onLike, onComment, onShare, onSave, onReact, navigate
         onDoubleClick={() => onLike(post.id)}
         onContextMenu={e => e.preventDefault()}
       >
+        {hasMusic && (
+          <audio
+            ref={audioRef}
+            src={post.music.url}
+            loop
+            muted={muted}
+            playsInline
+          />
+        )}
         <img src={post.image} alt="" loading="lazy"
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none" />
-        <div className="absolute top-3 left-3 bg-black/40 backdrop-blur-md rounded-full px-3 py-1 flex items-center gap-1.5">
-          <Music className="w-3 h-3 text-[#B026FF]" />
-          <span className="text-[10px] text-white/90 truncate max-w-[120px]">{post.audioContext}</span>
-        </div>
+        
+        {/* Music Badge with Play/Mute controls */}
+        {(post.music || post.audioContext) && (
+          <div 
+            onClick={hasMusic ? toggleMute : undefined}
+            className={`absolute top-3 left-3 bg-black/60 hover:bg-black/80 transition-colors backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2 select-none z-20 ${hasMusic ? 'cursor-pointer border border-[#B026FF]/30 shadow-lg shadow-[#B026FF]/10' : ''}`}
+          >
+            {hasMusic ? (
+              <>
+                {isPlaying && !muted ? (
+                  <div className="flex items-end gap-[2px] h-3 w-3">
+                    <span className="w-[2px] bg-[#00F0FF] rounded-full animate-[equalizer_0.8s_infinite_alternate]" style={{ animationDelay: '0.1s' }} />
+                    <span className="w-[2px] bg-[#B026FF] rounded-full animate-[equalizer_1.2s_infinite_alternate]" style={{ animationDelay: '0.4s' }} />
+                    <span className="w-[2px] bg-[#00F0FF] rounded-full animate-[equalizer_0.9s_infinite_alternate]" style={{ animationDelay: '0.2s' }} />
+                  </div>
+                ) : (
+                  <Music className="w-3.5 h-3.5 text-gray-400" />
+                )}
+                <span className="text-[10px] text-white/90 font-medium truncate max-w-[140px]">
+                  {post.music?.title || post.audioContext || "Background Music"}
+                </span>
+                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-white/10 text-white/70 uppercase">
+                  {muted ? "MUTED" : "PLAYING"}
+                </span>
+              </>
+            ) : (
+              <>
+                <Music className="w-3 h-3 text-[#B026FF]" />
+                <span className="text-[10px] text-white/90 truncate max-w-[120px]">{post.audioContext || "Original Audio"}</span>
+              </>
+            )}
+          </div>
+        )}
 
         <AnimatePresence>
           {pickerPostId === post.id && (
