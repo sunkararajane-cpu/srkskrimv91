@@ -541,13 +541,20 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
     const video = videoRef.current;
     if (!video) return;
     if (isPlaying) {
+      video.muted = muted;
       video.play().catch(err => {
         console.error("Video playback failed:", err);
       });
     } else {
       video.pause();
     }
-  }, [isPlaying]);
+  }, [isPlaying, muted]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = muted;
+    }
+  }, [muted]);
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -556,7 +563,11 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
 
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setMuted(prev => !prev);
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted;
+    }
   };
 
   return (
