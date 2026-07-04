@@ -534,8 +534,35 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
   const [isPlaying, setIsPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const isLocalVideo = post.videoSrc?.startsWith('data:video/') || post.image?.startsWith('data:video/');
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+            setIsPlaying(true);
+            setMuted(false); // Play with audio automatically
+          } else {
+            setIsPlaying(false);
+          }
+        });
+      },
+      {
+        threshold: [0.0, 0.6],
+      }
+    );
+
+    observer.observe(container);
+    return () => {
+      observer.unobserve(container);
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -543,7 +570,12 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
     if (isPlaying) {
       video.muted = muted;
       video.play().catch(err => {
-        console.error("Video playback failed:", err);
+        console.warn("Video playback failed, trying muted autoplay:", err);
+        // Fallback if browser blocks unmuted autoplay
+        video.muted = true;
+        video.play().catch(e => {
+          console.error("Muted video playback failed:", e);
+        });
       });
     } else {
       video.pause();
@@ -558,7 +590,13 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsPlaying(prev => !prev);
+    setIsPlaying(prev => {
+      const nextPlaying = !prev;
+      if (nextPlaying) {
+        setMuted(false); // Unmute when user clicks play
+      }
+      return nextPlaying;
+    });
   };
 
   const toggleMute = (e: React.MouseEvent) => {
@@ -571,7 +609,7 @@ function VideoThumbPost({ post, onLike, onComment, onShare, onSave, onReact, nav
   };
 
   return (
-    <div className="flex flex-col gap-3 pb-6 border-b border-white/5">
+    <div ref={containerRef} className="flex flex-col gap-3 pb-6 border-b border-white/5">
       <div className="flex items-center justify-between px-4">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/profile/${post.handle.replace('@', '')}`)}>
           <AvatarWithRing src={post.avatar} size="sm" isStory showOnlineDot username={post.handle} />
