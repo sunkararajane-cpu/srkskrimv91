@@ -79,11 +79,87 @@ function TextPost({ post, onLike, onComment, onShare, onSave, navigate }: any) {
   const gradient = gradients[post.id.charCodeAt(post.id.length - 1) % gradients.length];
   const hasCustomColor = !!post.bgColor;
 
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const hasMusic = !!post.music?.url;
+
+  useEffect(() => {
+    if (!hasMusic) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+            setIsPlaying(true);
+            setMuted(false); // Play unmuted when scrolled into view
+          } else {
+            setIsPlaying(false);
+          }
+        });
+      },
+      {
+        threshold: [0.0, 0.6],
+      }
+    );
+
+    observer.observe(container);
+    return () => {
+      observer.unobserve(container);
+    };
+  }, [hasMusic]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.muted = muted;
+      audio.play().catch(err => {
+        console.warn("Audio playback failed on TextPost, trying muted autoplay:", err);
+        audio.muted = true;
+        audio.play().catch(e => {
+          console.error("Muted audio playback failed on TextPost:", e);
+        });
+      });
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, muted]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = muted;
+    }
+  }, [muted]);
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = nextMuted;
+    }
+  };
+
   return (
     <div
+      ref={containerRef}
       className={`mx-4 mb-6 rounded-3xl border border-white/8 overflow-hidden shadow-xl ${hasCustomColor ? '' : `bg-gradient-to-br ${gradient}`}`}
       style={hasCustomColor ? { backgroundColor: post.bgColor } : undefined}
     >
+      {hasMusic && (
+        <audio
+          ref={audioRef}
+          src={post.music.url}
+          loop
+          muted={muted}
+          playsInline
+        />
+      )}
       {/* User row */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/profile/${post.handle.replace('@', '')}`)}>
@@ -132,9 +208,26 @@ function TextPost({ post, onLike, onComment, onShare, onSave, navigate }: any) {
           {MOODS.find(m => m.id === post.mood)?.emoji} {post.mood}
         </span>
         {post.music && (
-          <span className="flex items-center gap-1 text-[10px] font-bold text-[#00F0FF]">
-            <Music className="w-3 h-3" /> {post.music.title}
-          </span>
+          <div 
+            onClick={toggleMute}
+            className={`flex items-center gap-2 px-2.5 py-1 rounded-full text-[10px] font-bold select-none cursor-pointer border ${hasCustomColor ? 'text-[#00B0FF] bg-[#00B0FF]/5 border-[#00B0FF]/20 hover:bg-[#00B0FF]/10' : 'text-[#00F0FF] bg-[#00F0FF]/10 border-[#00F0FF]/20 hover:bg-[#00F0FF]/20'} transition-all shadow-sm`}
+          >
+            {isPlaying && !muted ? (
+              <div className="flex items-end gap-[2px] h-3 w-3">
+                <span className="w-[1.5px] bg-[#00F0FF] rounded-full animate-[equalizer_0.8s_infinite_alternate]" style={{ animationDelay: '0.1s' }} />
+                <span className="w-[1.5px] bg-[#B026FF] rounded-full animate-[equalizer_1.2s_infinite_alternate]" style={{ animationDelay: '0.4s' }} />
+                <span className="w-[1.5px] bg-[#00F0FF] rounded-full animate-[equalizer_0.9s_infinite_alternate]" style={{ animationDelay: '0.2s' }} />
+              </div>
+            ) : (
+              <Music className="w-3.5 h-3.5 text-gray-400 animate-pulse" />
+            )}
+            <span className="truncate max-w-[140px]">
+              {post.music.title}
+            </span>
+            <span className={`text-[8px] font-bold px-1 py-0.5 rounded uppercase ${hasCustomColor ? 'bg-black/10 text-black/70' : 'bg-white/10 text-white/70'}`}>
+              {muted ? "MUTED" : "PLAYING"}
+            </span>
+          </div>
         )}
         {post.taggedUsers?.length > 0 && (
           <span className={`text-[10px] ${hasCustomColor ? 'text-black/40' : 'text-white/30'}`}>
